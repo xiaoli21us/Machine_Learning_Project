@@ -1,0 +1,90 @@
+
+
+####Read in data
+
+```{r}
+library(ggplot2)
+library(caret)
+library(randomForest)
+setwd("C:/Users/Lily/course8/project")
+trainingdata <- read.csv("./pml-training.csv")
+testdata <- read.csv("./pml-testing.csv")
+```
+#### Remove near zero covariates
+
+```{r}
+nearzero <- nearZeroVar(trainingdata, saveMetrics = T)
+trainingdata <- trainingdata[, !nearzero$nzv]
+```
+
+#####Remove variables with more than 80% missing 
+
+```{r}
+egvar <- sapply(colnames(trainingdata), function(x) if(sum(is.na(trainingdata[, x])) > 0.8*nrow(trainingdata)){return(T)}else{return(F)})
+
+trainingdata <- trainingdata[, !egvar]
+```
+
+####Remove variables with more than 80% missing and subset
+
+```{r}
+egvar <- sapply(colnames(trainingdata), function(x) if(sum(is.na(trainingdata[, x])) > 0.8*nrow(trainingdata)){return(T)}else{return(F)})
+trainingdata <- trainingdata[, !egvar]
+trainingdata <- trainingdata[8:length(trainingdata)]
+```
+
+##### Split the cleaned testing data into training and cross validation
+
+```{r}
+inTrain <- createDataPartition(y = trainingdata$classe, p = 0.7, list = FALSE)
+training <- trainingdata[inTrain, ]
+crossval <- trainingdata[-inTrain, ]
+```
+#### Plot a correlation matrix
+
+```{r, echo=FALSE}
+correlMatrix <- cor(training[, -length(training)])
+library(corrplot)
+corrplot(correlMatrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.8,tl.col = rgb(0, 0, 0))
+
+```
+
+```{r}
+model <- randomForest(classe ~ ., data = training)
+
+```
+
+#### Cossvalidate the model using the remaining 30% of data
+Crossvalidate the model by using the 30% of the training data. 
+From the output we can see this model generates a 99.3% prediction accuracy. 
+So this model proved very robust and adequete to predict new data.
+```{r}
+predictCrossVal <- predict(model, crossval)
+library(e1071)
+confusionMatrix(crossval$classe, predictCrossVal)
+
+```
+#### Apply the same treatment to the final testing data
+```{r}
+data_test_NAs <- apply(testdata, 2, function(x) {sum(is.na(x))})
+data_test_clean <- testdata[,which(data_test_NAs == 0)]
+data_test_clean <- data_test_clean[8:length(data_test_clean)]
+
+```
+#### Predict the classes of the test set
+
+```{r}
+predictTest <- predict(model, data_test_clean)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictTest)
+
+```
+
